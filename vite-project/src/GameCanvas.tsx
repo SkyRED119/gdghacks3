@@ -29,9 +29,20 @@ export const GameCanvas: React.FC = () => {
         });
 
         socket.on('updatePlayers', (serverPlayers) => {
-            // Remove ourself from the list of "other players"
+        const myId = socket.id;
+        if (myId && serverPlayers[myId]) {
+            // Sync our own HP and position if the server forced a respawn
+            state.current.player.hp = serverPlayers[myId].hp;
+            
+            // If we are far away from where the server says we are (Respawn)
+            const dist = Math.hypot(state.current.player.x - serverPlayers[myId].x, state.current.player.y - serverPlayers[myId].y);
+            if (dist > 100) {
+                state.current.player.x = serverPlayers[myId].x;
+                state.current.player.y = serverPlayers[myId].y;
+            }
+        }
             const others = { ...serverPlayers };
-            delete others[socket.id!];
+            delete others[myId!];
             state.current.otherPlayers = others;
         });
 
@@ -40,6 +51,10 @@ export const GameCanvas: React.FC = () => {
                 state.current.otherPlayers[data.id].x = data.x;
                 state.current.otherPlayers[data.id].y = data.y;
             }
+        });
+
+        socket.on('updateEnemies', (serverEnemies) => {
+            state.current.enemies = serverEnemies;
         });
 
         return () => {
@@ -54,54 +69,91 @@ export const GameCanvas: React.FC = () => {
         player: { 
             x: 50, y: 50, width: 40, height: 40, 
             vx: 0, vy: 0, accel: 0.8, friction: 0.85, 
-            maxSpeed: 6, color: '#3498db', lastAttack: 0 
+            maxSpeed: 6, color: '#3498db', lastAttack: 0,
+            hp: 100, maxHp: 100
         },
         otherPlayers: {},
         dummy: { x: 100, y: 300, width: 40, height: 40, hp: 100, maxHp: 100, isDead: false, respawnTimer: 0 },
         worldItems: [
-            { id: 1, name: 'Dagger', x: 200, y: 100, width: 20, height: 20, price: 20, damage: 10, speed: 1.5, color: '#95a5a6' },
-            { id: 2, name: 'Sword', x: 300, y: 100, width: 25, height: 25, price: 50, damage: 25, speed: 1.0, color: '#bdc3c7' },
-            { id: 3, name: 'Hammer', x: 400, y: 100, width: 30, height: 30, price: 100, damage: 60, speed: 0.5, color: '#7f8c8d' }
-        ],
+        { id: 1, name: 'Dagger', x: 200, y: 100, width: 20, height: 20, price: 20, damage: 10, speed: 1.5, color: '#95a5a6', range: 30 },
+        { id: 2, name: 'Sword', x: 300, y: 100, width: 25, height: 25, price: 50, damage: 25, speed: 1.0, color: '#bdc3c7', range: 50 },
+        { id: 3, name: 'Hammer', x: 400, y: 100, width: 30, height: 30, price: 100, damage: 60, speed: 0.5, color: '#7f8c8d', range: 70 }
+    ],
         currency: 100,
         equippedWeapon: null,
-        keys: {}
+        keys: {}, 
+        enemies: {}
     });
 
     // --- GAME ENGINE FUNCTIONS ---
     const update = () => {
-        const s = state.current;
-        const oldX = s.player.x;
-        const oldY = s.player.y;
-        
-        // Call the engine functions
-        updatePlayerPhysics(s.player, s.keys);
-        const interactionResult = processInteractions(s, resellStation);
+    const s = state.current;
+    if (!s) return;
 
-        if (interactionResult?.hit) {
-        socketRef.current?.emit('hitDummy', { damage: interactionResult.damage });
+    // 1. Physics & Movement
+    const oldX = s.player.x;
+    const oldY = s.player.y;
+    updatePlayerPhysics(s.player, s.keys);
+
+    // 2. Interaction Logic
+    // This is where the crash was happening!
+    const interactionResult = processInteractions(s, resellStation);
+
+    // ONLY proceed if interactionResult is NOT null
+        if (interactionResult) {
+            if (interactionResult.enemyId) {
+                // We hit a zombie
+                socketRef.current?.emit('hitEnemy', { 
+                    enemyId: interactionResult.enemyId, 
+                    damage: interactionResult.damage 
+                });
+            } else if (interactionResult.hit) {
+                // We hit the dummy
+                socketRef.current?.emit('hitDummy', { 
+                    damage: interactionResult.damage 
+                });
+            }
         }
 
-        // Only send data if we actually moved
+        // 3. Sync movement to server
         if (s.player.x !== oldX || s.player.y !== oldY) {
             socketRef.current?.emit('move', { x: s.player.x, y: s.player.y });
         }
 
-        // 2. Sync currency to React UI
+        // 4. Sync currency to React UI
         if (s.currency !== currency) setCurrency(s.currency);
     };
 
     const draw = (ctx: CanvasRenderingContext2D) => {
         const s = state.current;
-        const p = s.player;
-
+        if (!s || !s.player) return;
+        
+        // 1. ALWAYS CLEAR FIRST
         ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
 
+        const p = s.player;
+
         ctx.save();
-        // Camera follow
-        ctx.translate(-p.x + ctx.canvas.width / 2, -p.y + ctx.canvas.height / 2);
+        // 2. APPLY CAMERA
+        ctx.translate(
+            Math.floor(-p.x + ctx.canvas.width / 2), 
+            Math.floor(-p.y + ctx.canvas.height / 2)
+        );
 
         drawGrid(ctx);
+
+        // Draw Zombies safely
+        if (s.enemies) {
+            Object.values(s.enemies).forEach((zombie: any) => {
+                ctx.fillStyle = '#8e44ad';
+                ctx.fillRect(zombie.x, zombie.y, 30, 30);
+                
+                // Health bar
+                ctx.fillStyle = 'red';
+                const healthWidth = (zombie.hp / zombie.maxHp) * 30;
+                ctx.fillRect(zombie.x, zombie.y - 5, Math.max(0, healthWidth), 3);
+            });
+        }
 
         // 1. Draw Stations
         ctx.fillStyle = '#e74c3c';
@@ -124,14 +176,23 @@ export const GameCanvas: React.FC = () => {
             ctx.fillRect(s.dummy.x, s.dummy.y - 10, (s.dummy.hp / s.dummy.maxHp) * s.dummy.width, 5);
         }
 
-        // 4. Draw Player (Color changes if weapon equipped)
+        // 3. Draw Local Player
         ctx.fillStyle = s.equippedWeapon ? s.equippedWeapon.color : p.color;
         ctx.fillRect(p.x, p.y, p.width, p.height);
+
+        ctx.fillStyle = '#2ecc71'; 
+        const myHealthWidth = (p.hp / p.maxHp) * 40;
+        ctx.fillRect(p.x, p.y - 10, myHealthWidth, 5);
 
         // Inside the draw loop in GameCanvas.tsx
         Object.values(s.otherPlayers).forEach(remotePlayer => {
             ctx.fillStyle = remotePlayer.color;
             ctx.fillRect(remotePlayer.x, remotePlayer.y, 40, 40);
+
+            // Draw Health Bar for others
+            ctx.fillStyle = 'red';
+            const healthBarWidth = (remotePlayer.hp / remotePlayer.maxHp) * 40;
+            ctx.fillRect(remotePlayer.x, remotePlayer.y - 10, healthBarWidth, 5);
         });
 
         // 5. Draw Cooldown
