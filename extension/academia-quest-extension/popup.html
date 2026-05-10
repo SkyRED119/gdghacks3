@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Academia Quest</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <div id="app">
+
+    <!-- Header -->
+    <header>
+      <div class="logo">⚔️ Academia Quest</div>
+      <button id="btn-sync" class="icon-btn" title="Sync now">↻</button>
+    </header>
+
+    <!-- Loading -->
+    <div id="loading" class="center">
+      <div class="spinner"></div>
+      <p>Loading…</p>
+    </div>
+
+    <!-- Main content (hidden until loaded) -->
+    <main id="content" hidden>
+
+      <!-- Player card -->
+      <section class="player-card">
+        <div class="player-top">
+          <div>
+            <div class="player-name" id="player-name">Adventurer</div>
+            <div class="player-level" id="player-level">Level 1</div>
+          </div>
+          <div class="stats-right">
+            <div class="stat-badge streak">🔥 <span id="streak">0</span>d</div>
+            <div class="stat-badge gpa">🎓 <span id="gpa">–</span></div>
+          </div>
+        </div>
+
+        <!-- XP bar -->
+        <div class="xp-label">
+          <span>XP</span>
+          <span id="xp-text">0 / 100</span>
+        </div>
+        <div class="xp-track">
+          <div class="xp-fill" id="xp-fill" style="width: 0%"></div>
+        </div>
+      </section>
+
+      <!-- Assignment list -->
+      <section class="section">
+        <div class="section-header">
+          <span>⚡ Active Quests</span>
+          <span class="count" id="quest-count">0</span>
+        </div>
+        <ul id="quest-list" class="quest-list"></ul>
+        <p id="no-quests" hidden class="empty-msg">
+          Open Brightspace to sync assignments!
+        </p>
+      </section>
+
+      <!-- Recent XP events -->
+      <section class="section">
+        <div class="section-header">
+          <span>✨ Recent XP</span>
+        </div>
+        <ul id="xp-log" class="xp-log"></ul>
+      </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer>
+      <button id="btn-brightspace" class="link-btn">Open Brightspace →</button>
+      <button id="btn-dashboard" class="link-btn">Dashboard →</button>
+    </footer>
+
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>
