@@ -8,6 +8,7 @@ import { RefreshCw } from 'lucide-react';
 import { api } from './lib/api';
 import { OutlineUpload } from './components/OutlineUpload';
 import { useAuth } from './hooks/useAuth';
+import { getToken } from './lib/api';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -991,6 +992,41 @@ function SemesterGrid({ events, typeColours, onStartGame, semester }: { events: 
 
 
 // ─── Edit Account Modal ───────────────────────────────────────────────────────
+function TokenPanel() {
+  const [copied, setCopied] = useState(false);
+  const token = getToken();
+  if (!token) return null;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+        🔑 <strong>Extension Token</strong> — paste into the Chrome extension popup to link your account
+      </div>
+      <div style={{ display: 'flex', gap: 6 }}>
+        <input
+          readOnly
+          value={token}
+          style={{
+            flex: 1, background: 'var(--bg)', border: '1px solid var(--border)',
+            borderRadius: 6, color: 'var(--text-faint)', fontFamily: 'monospace',
+            fontSize: 10, padding: '6px 10px', outline: 'none',
+          }}
+        />
+        <button
+          onClick={() => { navigator.clipboard.writeText(token); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
+          style={{
+            background: copied ? '#27ae60' : 'var(--text)', color: 'var(--bg)',
+            border: 'none', borderRadius: 6, padding: '6px 12px',
+            fontSize: 11, fontWeight: 600, cursor: 'pointer', transition: 'background 0.2s',
+          }}
+        >
+          {copied ? '✓ Copied' : 'Copy'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+
 
 function EditAccountModal({ user, onClose, theme }: { user: any; onClose: () => void; theme?: string }) {
   const displayName = user?.name ?? 'Unknown';
@@ -1069,7 +1105,7 @@ function EditAccountModal({ user, onClose, theme }: { user: any; onClose: () => 
           Your account is managed through Google.<br />
           Sign in again to switch accounts.
         </p>
-
+        <TokenPanel />
         <button
           onClick={onClose}
           style={{
