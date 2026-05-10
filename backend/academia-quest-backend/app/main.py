@@ -166,6 +166,38 @@ def full_sync(
 # In-memory sessions (replace with DB/Redis for production)
 _game_sessions: dict = {}
 
+
+# ─── Quest Arena: persistent armor / gems / unlocks state ──────────────────
+
+@app.get("/api/game/me", response_model=schemas.GameStateOut)
+def get_my_game_state(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """
+    Return the authenticated user's persisted Quest Arena game state.
+    Creates a default silver-armor record if the user has never played.
+    """
+    row = crud.get_or_create_game_state(db, current_user.id)
+    return crud.serialize_game_state(row)
+
+
+@app.put("/api/game/me", response_model=schemas.GameStateOut)
+def save_my_game_state(
+    payload: schemas.GameStateIn,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """
+    Replace the authenticated user's Quest Arena game state with the
+    incoming payload. The frontend should call this whenever gems,
+    armor, unlocks, or pending grades change. Server validates colors
+    and clamps values, so it's safe to send the whole state blindly.
+    """
+    row = crud.upsert_game_state(db, current_user.id, payload)
+    return crud.serialize_game_state(row)
+
+
 BOSSES = [
     {"name": "The Procrastination Dragon", "emoji": "🐉", "maxHp": 300, "attack": 25},
     {"name": "The Deadline Demon",         "emoji": "👹", "maxHp": 250, "attack": 30},

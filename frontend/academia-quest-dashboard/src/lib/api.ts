@@ -85,7 +85,38 @@ export const api = {
 
   // GET /api/game/state/:sessionId
   gameState: (sessionId: string) => authFetch(`/api/game/state/${sessionId}`),
+
+  // ── Quest Arena persisted state (gems, armor, unlocks, pending grades) ──
+  // GET /api/game/me  →  { gems, armor, unlocks, pendingGrades }
+  // Creates a default silver-armor record on first call.
+  questArenaGet: () => authFetch("/api/game/me") as Promise<QuestArenaState>,
+
+  // PUT /api/game/me  → replaces the whole state for the current user.
+  questArenaSave: (state: QuestArenaState) =>
+    authFetch("/api/game/me", {
+      method: "PUT",
+      body: JSON.stringify(state),
+    }) as Promise<QuestArenaState>,
 };
+
+// ─── Quest Arena state shape ────────────────────────────────────────────────
+// Kept here so the api module is the single source of truth.
+
+export type ArmorColor = "silver" | "red" | "blue" | "gold" | "black";
+export type ArmorSlot = "head" | "chest" | "legs";
+
+export interface PendingGrade {
+  id: number;
+  name: string;
+  percent: number;
+}
+
+export interface QuestArenaState {
+  gems: number;
+  armor: Record<ArmorSlot, ArmorColor>;
+  unlocks: Record<ArmorSlot, ArmorColor[]>;
+  pendingGrades: PendingGrade[];
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 export interface OutlineAssignment {
