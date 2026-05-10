@@ -1,3 +1,5 @@
+export {};
+
 // --- 1. Types & Interfaces ---
 export interface Vector2 { x: number; y: number; }
 export interface Rect extends Vector2 { width: number; height: number; }
@@ -28,8 +30,15 @@ export interface Dummy extends Rect {
     respawnTimer: number;
 }
 
+export interface RemotePlayer {
+    x: number;
+    y: number;
+    color: string;
+}
+
 export interface GameState {
     player: Player;
+    otherPlayers: Record<string, RemotePlayer>;
     dummy: Dummy;
     worldItems: Weapon[];
     currency: number;
@@ -95,15 +104,16 @@ export function updatePlayerPhysics(player: Player, keys: Record<string, boolean
 /**
  * Handles interactions: Buying, Selling, and Combat
  */
-export function processInteractions(state: GameState, resellStation: Rect) {
-    const { player, dummy, worldItems } = state;
+export function processInteractions(state: GameState, resellStation: Rect): { hit: boolean, damage: number } | null {    
+    // 1. Destructure everything we need at the very start
+    const { player, dummy, worldItems, keys, equippedWeapon, currency } = state;
     const now = Date.now();
 
-    // 1. Buying Logic (Iterate backwards to safely splice)
+    // 2. Buying Logic (Iterate backwards to safely splice)
     for (let i = worldItems.length - 1; i >= 0; i--) {
         const item = worldItems[i];
         if (rectIntersect(player, item)) {
-            if (state.currency >= item.price && !state.equippedWeapon) {
+            if (currency >= item.price && !equippedWeapon) {
                 state.currency -= item.price;
                 state.equippedWeapon = item;
                 worldItems.splice(i, 1);
@@ -112,43 +122,27 @@ export function processInteractions(state: GameState, resellStation: Rect) {
         }
     }
 
-    // 2. Reselling Logic
-    if (state.equippedWeapon && rectIntersect(player, resellStation)) {
-        state.currency += state.equippedWeapon.price;
+    // 3. Reselling Logic
+    if (equippedWeapon && rectIntersect(player, resellStation)) {
+        state.currency += equippedWeapon.price;
         state.equippedWeapon = null;
     }
 
-    // 3. Combat Logic
-    if (!dummy.isDead) {
-        // We check BOTH 'Space' and 'KeySpace' just to be safe
-        const isPressingAttack = state.keys['Space'] || state.keys['KeySpace'];
+    // 4. Combat Logic
+    // No 'const' needed here anymore, we already have these variables from the top
+    if (!dummy.isDead && equippedWeapon && (keys['Space'] || keys['KeySpace'])) {
+        const cooldownMs = 1000 / equippedWeapon.speed;
         
-        if (isPressingAttack && state.equippedWeapon && rectIntersect(player, dummy)) {
-            const cooldownMs = 1000 / state.equippedWeapon.speed;
-            
-            if (now - player.lastAttack > cooldownMs) {
-                dummy.hp -= state.equippedWeapon.damage;
+        if (now - player.lastAttack > cooldownMs) {
+            if (rectIntersect(player, dummy)) {
                 player.lastAttack = now;
-                console.log(`Hit! Dummy HP: ${dummy.hp}`);
-
-                if (dummy.hp <= 0) {
-                    dummy.hp = 0;
-                    dummy.isDead = true;
-                    dummy.respawnTimer = now + 3000;
-                }
+                // Return damage info so GameCanvas can emit it to the server
+                return { hit: true, damage: equippedWeapon.damage };
             }
         }
-        
-        // Passive healing
-        if (dummy.hp < dummy.maxHp && dummy.hp > 0) {
-            dummy.hp += 0.1;
-        }
-    } else {
-        if (now > dummy.respawnTimer) {
-            dummy.isDead = false;
-            dummy.hp = dummy.maxHp;
-        }
     }
+    
+    return null;
 }
 
 // --- 5. Drawing Functions ---

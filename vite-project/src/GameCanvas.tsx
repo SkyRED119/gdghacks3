@@ -7,10 +7,45 @@ import {
     type GameState, 
     type Rect 
 } from './engine';
+import { io, Socket } from 'socket.io-client';
 
 export const GameCanvas: React.FC = () => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [currency, setCurrency] = useState(100);
+    const socketRef = useRef<Socket | null>(null);
+
+    useEffect(() => {
+        // Connect to the server
+        socketRef.current = io('http://10.12.187.119:3000');
+        const socket = socketRef.current;
+
+        socket.on('updateDummy', (serverDummy) => {
+        state.current.dummy = { ...state.current.dummy, ...serverDummy };
+        });
+
+        socket.on('enemyDeath', (data) => {
+        console.log(`${data.type} has been defeated!`);
+        // You could trigger a global sound or animation here
+        });
+
+        socket.on('updatePlayers', (serverPlayers) => {
+            // Remove ourself from the list of "other players"
+            const others = { ...serverPlayers };
+            delete others[socket.id!];
+            state.current.otherPlayers = others;
+        });
+
+        socket.on('playerMoved', (data) => {
+            if (state.current.otherPlayers[data.id]) {
+                state.current.otherPlayers[data.id].x = data.x;
+                state.current.otherPlayers[data.id].y = data.y;
+            }
+        });
+
+        return () => {
+            socket.disconnect();
+        };
+    }, []);
 
     // Define stations here so they are accessible
     const resellStation: Rect = { x: 500, y: 300, width: 80, height: 80 };
@@ -21,6 +56,7 @@ export const GameCanvas: React.FC = () => {
             vx: 0, vy: 0, accel: 0.8, friction: 0.85, 
             maxSpeed: 6, color: '#3498db', lastAttack: 0 
         },
+        otherPlayers: {},
         dummy: { x: 100, y: 300, width: 40, height: 40, hp: 100, maxHp: 100, isDead: false, respawnTimer: 0 },
         worldItems: [
             { id: 1, name: 'Dagger', x: 200, y: 100, width: 20, height: 20, price: 20, damage: 10, speed: 1.5, color: '#95a5a6' },
@@ -35,10 +71,21 @@ export const GameCanvas: React.FC = () => {
     // --- GAME ENGINE FUNCTIONS ---
     const update = () => {
         const s = state.current;
+        const oldX = s.player.x;
+        const oldY = s.player.y;
         
         // Call the engine functions
         updatePlayerPhysics(s.player, s.keys);
-        processInteractions(s, resellStation);
+        const interactionResult = processInteractions(s, resellStation);
+
+        if (interactionResult?.hit) {
+        socketRef.current?.emit('hitDummy', { damage: interactionResult.damage });
+        }
+
+        // Only send data if we actually moved
+        if (s.player.x !== oldX || s.player.y !== oldY) {
+            socketRef.current?.emit('move', { x: s.player.x, y: s.player.y });
+        }
 
         // 2. Sync currency to React UI
         if (s.currency !== currency) setCurrency(s.currency);
@@ -80,6 +127,12 @@ export const GameCanvas: React.FC = () => {
         // 4. Draw Player (Color changes if weapon equipped)
         ctx.fillStyle = s.equippedWeapon ? s.equippedWeapon.color : p.color;
         ctx.fillRect(p.x, p.y, p.width, p.height);
+
+        // Inside the draw loop in GameCanvas.tsx
+        Object.values(s.otherPlayers).forEach(remotePlayer => {
+            ctx.fillStyle = remotePlayer.color;
+            ctx.fillRect(remotePlayer.x, remotePlayer.y, 40, 40);
+        });
 
         // 5. Draw Cooldown
         if (s.equippedWeapon) {
