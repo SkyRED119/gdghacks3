@@ -53,3 +53,36 @@ class Grade(Base):
     source = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+
+class GameState(Base):
+    """
+    Per-user persistent state for the Quest Arena game.
+
+    Stores the player's gem balance, currently equipped armor (one color
+    per slot), the set of unlocked colors per slot, and any pending grade
+    entries that haven't been claimed yet.
+
+    `unlocks_*` and `pending_grades` are stored as JSON-encoded TEXT so
+    we can keep the schema portable across SQLite and Postgres without
+    needing dialect-specific JSON columns.
+    """
+    __tablename__ = "game_state"
+
+    user_id = Column(String, primary_key=True)        # = users.id
+    gems = Column(Integer, default=0, nullable=False)
+
+    armor_head = Column(String, default="silver", nullable=False)
+    armor_chest = Column(String, default="silver", nullable=False)
+    armor_legs = Column(String, default="silver", nullable=False)
+
+    # JSON list of color strings, e.g. '["silver","red"]'
+    unlocks_head = Column(Text, default='["silver"]', nullable=False)
+    unlocks_chest = Column(Text, default='["silver"]', nullable=False)
+    unlocks_legs = Column(Text, default='["silver"]', nullable=False)
+
+    # JSON list of {id, name, percent}
+    pending_grades = Column(Text, default='[]', nullable=False)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())

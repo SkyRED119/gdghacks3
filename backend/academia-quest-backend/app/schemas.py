@@ -80,3 +80,27 @@ class FullSyncPayload(BaseModel):
 class GameActionPayload(BaseModel):
     sessionId: str
     action: str   # "attack" | "defend" | "skill"
+
+
+# Per-user persistent armor / gems / unlocks state.
+# Colors: "silver" | "red" | "blue" | "gold" | "black"
+# Slots:  "head" | "chest" | "legs"
+
+class PendingGradeIn(BaseModel):
+    id: int
+    name: str
+    percent: float
+
+
+class GameStateOut(BaseModel):
+    gems: int
+    armor: dict           # {head, chest, legs} -> color
+    unlocks: dict         # {head, chest, legs} -> [color, ...]
+    pendingGrades: List[PendingGradeIn]
+
+
+class GameStateIn(BaseModel):
+    gems: int
+    armor: dict
+    unlocks: dict
+    pendingGrades: List[PendingGradeIn]
