@@ -1,0 +1,256 @@
+import type { CourseEvent, PlayerState } from './types';
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  BACKEND STUB
+//  When your FastAPI backend is ready, replace this file's exports with real
+//  fetch calls. The shapes of CourseEvent[] and PlayerState must stay the same.
+//
+//  Expected API endpoints:
+//    GET /api/schedule          → CourseEvent[]
+//    GET /api/player            → PlayerState
+//    POST /api/grades/sync      → triggered by extension
+//    POST /api/assignments/sync → triggered by extension
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * REPLACE THIS with: const res = await fetch('http://localhost:8000/api/schedule');
+ *                    return res.json();
+ */
+export const MOCK_EVENTS: CourseEvent[] = [
+  // ── January ───────────────────────────────────────────────────────────────
+  {
+    id: 'cis150-a1',
+    title: 'Assignment 1',
+    courseCode: 'CIS 150',
+    courseName: 'Programming Foundations',
+    source: 'Course Outline',
+    date: 'Jan 17',
+    isoDate: '2026-01-17',
+    week: 2,
+    month: 'January',
+    type: 'assignment',
+    weight: 5,
+    grade: 88,
+    confidence: 95,
+    submittedOnTime: true,
+  },
+  {
+    id: 'math-quiz1',
+    title: 'Quiz 1',
+    courseCode: 'MATH 201',
+    courseName: 'Calculus II',
+    source: 'Course Outline',
+    date: 'Jan 21',
+    isoDate: '2026-01-21',
+    week: 3,
+    month: 'January',
+    type: 'quiz',
+    weight: 5,
+    grade: 72,
+    confidence: 90,
+    submittedOnTime: true,
+  },
+  {
+    id: 'eng101-essay',
+    title: 'Essay Draft',
+    courseCode: 'ENG 101',
+    courseName: 'Academic Writing',
+    source: 'Course Outline',
+    date: 'Jan 28',
+    isoDate: '2026-01-28',
+    week: 4,
+    month: 'January',
+    type: 'assignment',
+    weight: 8,
+    grade: null,
+    confidence: 88,
+  },
+  // ── February ──────────────────────────────────────────────────────────────
+  {
+    id: 'cis150-midterm1',
+    title: 'Midterm 1',
+    courseCode: 'CIS 150',
+    courseName: 'Programming Foundations',
+    source: 'Course Outline',
+    date: 'Feb 12',
+    isoDate: '2026-02-12',
+    week: 6,
+    month: 'February',
+    type: 'midterm',
+    weight: 20,
+    grade: null,
+    confidence: 92,
+  },
+  {
+    id: 'math-a2',
+    title: 'Assignment 2',
+    courseCode: 'MATH 201',
+    courseName: 'Calculus II',
+    source: 'D2L',
+    date: 'Feb 5',
+    isoDate: '2026-02-05',
+    week: 5,
+    month: 'February',
+    type: 'assignment',
+    weight: 5,
+    grade: null,
+    confidence: 99,
+  },
+  {
+    id: 'bio210-lab1',
+    title: 'Lab Report 1',
+    courseCode: 'BIO 210',
+    courseName: 'Cell Biology',
+    source: 'Course Outline',
+    date: 'Feb 19',
+    isoDate: '2026-02-19',
+    week: 7,
+    month: 'February',
+    type: 'lab',
+    weight: 7,
+    grade: null,
+    confidence: 87,
+  },
+  {
+    id: 'eng101-midterm',
+    title: 'Midterm',
+    courseCode: 'ENG 101',
+    courseName: 'Academic Writing',
+    source: 'Course Outline',
+    date: 'Feb 26',
+    isoDate: '2026-02-26',
+    week: 8,
+    month: 'February',
+    type: 'midterm',
+    weight: 25,
+    grade: null,
+    confidence: 91,
+  },
+  // ── March ─────────────────────────────────────────────────────────────────
+  {
+    id: 'cis150-a2',
+    title: 'Assignment 2',
+    courseCode: 'CIS 150',
+    courseName: 'Programming Foundations',
+    source: 'Course Outline',
+    date: 'Mar 5',
+    isoDate: '2026-03-05',
+    week: 9,
+    month: 'March',
+    type: 'assignment',
+    weight: 5,
+    grade: null,
+    confidence: 95,
+  },
+  {
+    id: 'math-midterm',
+    title: 'Midterm',
+    courseCode: 'MATH 201',
+    courseName: 'Calculus II',
+    source: 'Course Outline',
+    date: 'Mar 12',
+    isoDate: '2026-03-12',
+    week: 10,
+    month: 'March',
+    type: 'midterm',
+    weight: 30,
+    grade: null,
+    confidence: 94,
+  },
+  {
+    id: 'bio210-a1',
+    title: 'Assignment 1',
+    courseCode: 'BIO 210',
+    courseName: 'Cell Biology',
+    source: 'D2L',
+    date: 'Mar 19',
+    isoDate: '2026-03-19',
+    week: 11,
+    month: 'March',
+    type: 'assignment',
+    weight: 8,
+    grade: null,
+    confidence: 99,
+  },
+  {
+    id: 'eng101-final-draft',
+    title: 'Final Essay',
+    courseCode: 'ENG 101',
+    courseName: 'Academic Writing',
+    source: 'Course Outline',
+    date: 'Mar 26',
+    isoDate: '2026-03-26',
+    week: 12,
+    month: 'March',
+    type: 'assignment',
+    weight: 20,
+    grade: null,
+    confidence: 89,
+  },
+  // ── April ─────────────────────────────────────────────────────────────────
+  {
+    id: 'cis150-exam',
+    title: 'Final Exam',
+    courseCode: 'CIS 150',
+    courseName: 'Programming Foundations',
+    source: 'Course Outline',
+    date: 'Apr 9',
+    isoDate: '2026-04-09',
+    week: 14,
+    month: 'April',
+    type: 'exam',
+    weight: 40,
+    grade: null,
+    confidence: 96,
+  },
+  {
+    id: 'math-exam',
+    title: 'Final Exam',
+    courseCode: 'MATH 201',
+    courseName: 'Calculus II',
+    source: 'Course Outline',
+    date: 'Apr 16',
+    isoDate: '2026-04-16',
+    week: 15,
+    month: 'April',
+    type: 'exam',
+    weight: 40,
+    grade: null,
+    confidence: 96,
+  },
+  {
+    id: 'bio210-exam',
+    title: 'Final Exam',
+    courseCode: 'BIO 210',
+    courseName: 'Cell Biology',
+    source: 'Course Outline',
+    date: 'Apr 23',
+    isoDate: '2026-04-23',
+    week: 16,
+    month: 'April',
+    type: 'exam',
+    weight: 35,
+    grade: null,
+    confidence: 93,
+  },
+];
+
+export const MOCK_PLAYER: PlayerState = {
+  name: 'Student',
+  level: 3,
+  xp: 340,
+  xpToNext: 560,
+  currencyA: 120,
+  currencyB: 88,
+  streak: 5,
+  title: 'Deadline Knight',
+};
+
+/** Month blocks for winter semester */
+export const SEMESTER_MONTHS = ['January', 'February', 'March', 'April'] as const;
+
+/** 4 weeks per month, 16 weeks total */
+export function weeksForMonth(monthIndex: number): number[] {
+  const start = monthIndex * 4 + 1;
+  return [start, start + 1, start + 2, start + 3];
+}
