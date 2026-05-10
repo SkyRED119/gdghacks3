@@ -108,6 +108,23 @@ const MODAL_CSS = `
   animation: aq-popin 0.22s ease;
 }
 
+/* Game mode: lock the modal to the viewport, no outer scroll. The game
+   shell fills the remaining space, and the side panel scrolls internally
+   if its content overflows. */
+.aq-game-modal--game {
+  max-width: 1200px;
+  height: calc(100vh - 32px);
+  max-height: calc(100vh - 32px);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.aq-game-modal--game .aq-modal-header {
+  flex-shrink: 0;
+  padding: 14px 22px;
+}
+.aq-game-modal--game .aq-modal-title { font-size: 22px; }
+
 @keyframes aq-fadein { from { opacity: 0; } to { opacity: 1; } }
 @keyframes aq-popin {
   from { opacity: 0; transform: scale(0.97) translateY(4px); }
@@ -152,6 +169,15 @@ const MODAL_CSS = `
 }
 
 .aq-modal-body { padding: 28px; }
+
+.aq-modal-body--game {
+  flex: 1 1 auto;
+  min-height: 0;            /* let children shrink inside flex parent */
+  padding: 14px 22px 18px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
 
 /* Eyebrow + sub copy used inside body */
 .aq-eyebrow {
@@ -439,10 +465,12 @@ const MODAL_CSS = `
 
 /* Game screen */
 .aq-game-shell {
+  flex: 1 1 auto;
+  min-height: 0;            /* allow children to shrink */
   display: grid;
-  grid-template-columns: 760px 1fr;
-  gap: 20px;
-  align-items: start;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: 14px;
+  align-items: stretch;
 }
 .aq-game-container {
   border: 1px solid var(--border);
@@ -450,19 +478,37 @@ const MODAL_CSS = `
   overflow: hidden;
   background: var(--bg-surface);
   box-shadow: var(--shadow-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: 0;
 }
 .aq-game-canvas {
   display: block;
-  width: 760px;
-  height: 460px;
+  /* The canvas keeps its 760×460 internal pixel buffer for rendering,
+     but visually scales to fit whatever space the container has,
+     preserving the source aspect ratio. */
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  aspect-ratio: 760 / 460;
   background: #efede9;
   image-rendering: pixelated;
 }
-.aq-side-panel { display: grid; gap: 14px; }
+.aq-side-panel {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;       /* gap so scrollbar doesn't overlap card edges */
+}
 .aq-panel-card {
   border: 1px solid var(--border);
   border-radius: 12px;
-  padding: 14px 16px;
+  padding: 12px 14px;
   background: var(--bg-card);
 }
 .aq-panel-card h3 {
@@ -516,12 +562,10 @@ const MODAL_CSS = `
 }
 
 .aq-game-topbar {
-  display: flex; justify-content: space-between; align-items: center;
-  margin-bottom: 18px; gap: 12px;
+  display: flex; justify-content: flex-end; align-items: center;
+  margin-bottom: 12px; gap: 12px;
   flex-wrap: wrap;
-}
-.aq-game-topbar-actions {
-  display: flex; align-items: center; gap: 10px;
+  flex-shrink: 0;
 }
 
 .aq-customize-actions {
@@ -546,11 +590,18 @@ const MODAL_CSS = `
 @keyframes fl-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
 
 @media (max-width: 880px) {
-  .aq-customize-layout, .aq-game-shell { grid-template-columns: 1fr; }
+  .aq-customize-layout { grid-template-columns: 1fr; }
   .aq-preview-panel { position: static; }
   .aq-rules-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .aq-color-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .aq-game-canvas { width: 100%; height: auto; }
+
+  .aq-game-shell {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+  .aq-side-panel {
+    max-height: 30vh;
+  }
 }
 `;
 
@@ -753,6 +804,8 @@ export function GameModal({ onClose }: Props) {
     setArmor({ head: color, chest: color, legs: color });
   }
 
+  const inGame = screen === 'game';
+
   return (
     <div
       className="aq-game-modal-backdrop"
@@ -760,7 +813,7 @@ export function GameModal({ onClose }: Props) {
     >
       <style>{MODAL_CSS}</style>
       <div
-        className="aq-game-modal"
+        className={`aq-game-modal${inGame ? ' aq-game-modal--game' : ''}`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -782,7 +835,7 @@ export function GameModal({ onClose }: Props) {
         </div>
 
         {/* Body */}
-        <div className="aq-modal-body">
+        <div className={`aq-modal-body${inGame ? ' aq-modal-body--game' : ''}`}>
           {!loaded && !loadError && (
             <div className="aq-loading">Loading your saved progress…</div>
           )}
@@ -971,18 +1024,13 @@ export function GameModal({ onClose }: Props) {
           {loaded && screen === 'game' && (
             <>
               <div className="aq-game-topbar">
-                <p className="aq-muted">
-                  W A S D to move · Space to slash · faces last direction you ran
-                </p>
-                <div className="aq-game-topbar-actions">
-                  <span className="aq-gem-pill">💎 {gems} gems</span>
-                  <button
-                    className="aq-btn aq-btn-ghost"
-                    onClick={() => setScreen('menu')}
-                  >
-                    Back to Menu
-                  </button>
-                </div>
+                <span className="aq-gem-pill">💎 {gems} gems</span>
+                <button
+                  className="aq-btn aq-btn-ghost"
+                  onClick={() => setScreen('menu')}
+                >
+                  Back to Menu
+                </button>
               </div>
 
               <div className="aq-game-shell">
