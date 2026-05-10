@@ -11,6 +11,7 @@ export interface Weapon extends Rect {
     damage: number;
     speed: number;
     color: string;
+    range: number; // New property: pixels of extra reach
 }
 
 export interface Player extends Rect {
@@ -21,6 +22,8 @@ export interface Player extends Rect {
     maxSpeed: number;
     color: string;
     lastAttack: number;
+    hp: number;
+    maxHp: number;
 }
 
 export interface Dummy extends Rect {
@@ -34,6 +37,8 @@ export interface RemotePlayer {
     x: number;
     y: number;
     color: string;
+    hp: number;      
+    maxHp: number;
 }
 
 export interface GameState {
@@ -44,6 +49,7 @@ export interface GameState {
     currency: number;
     equippedWeapon: Weapon | null;
     keys: Record<string, boolean>;
+    enemies: Record<string, any>;
 }
 
 // --- 2. Constants ---
@@ -57,6 +63,19 @@ export function rectIntersect(r1: Rect, r2: Rect): boolean {
            r1.x + r1.width > r2.x &&
            r1.y < r2.y + r2.height &&
            r1.y + r1.height > r2.y;
+}
+
+export function getDistance(r1: Rect, r2: Rect): number {
+    // Fallback to 30 if width/height are missing
+    const w1 = r1.width || 40;
+    const h1 = r1.height || 40;
+    const w2 = r2.width || 30;
+    const h2 = r2.height || 30;
+
+    const c1 = { x: r1.x + w1 / 2, y: r1.y + h1 / 2 };
+    const c2 = { x: r2.x + w2 / 2, y: r2.y + h2 / 2 };
+    
+    return Math.hypot(c1.x - c2.x, c1.y - c2.y);
 }
 
 // --- 4. Core Logic Functions ---
@@ -104,9 +123,9 @@ export function updatePlayerPhysics(player: Player, keys: Record<string, boolean
 /**
  * Handles interactions: Buying, Selling, and Combat
  */
-export function processInteractions(state: GameState, resellStation: Rect): { hit: boolean, damage: number } | null {    
+export function processInteractions(state: GameState, resellStation: Rect): { hit: boolean, damage: number, enemyId?: string } | null {    
     // 1. Destructure everything we need at the very start
-    const { player, dummy, worldItems, keys, equippedWeapon, currency } = state;
+    const { player, enemies, dummy, worldItems, keys, equippedWeapon, currency } = state;
     const now = Date.now();
 
     // 2. Buying Logic (Iterate backwards to safely splice)
@@ -128,20 +147,28 @@ export function processInteractions(state: GameState, resellStation: Rect): { hi
         state.equippedWeapon = null;
     }
 
-    // 4. Combat Logic
-    // No 'const' needed here anymore, we already have these variables from the top
-    if (!dummy.isDead && equippedWeapon && (keys['Space'] || keys['KeySpace'])) {
+    if (equippedWeapon && (keys['Space'] || keys['KeySpace'])) {
         const cooldownMs = 1000 / equippedWeapon.speed;
-        
         if (now - player.lastAttack > cooldownMs) {
-            if (rectIntersect(player, dummy)) {
+            
+            // Total reach = player size + weapon range
+            const reach = (player.width / 2) + equippedWeapon.range;
+
+            // Check Hoard Enemies
+            for (const id in enemies) {
+                if (getDistance(player, enemies[id]) < reach) {
+                    player.lastAttack = now;
+                    return { hit: true, damage: equippedWeapon.damage, enemyId: id };
+                }
+            }
+
+            // Check Dummy
+            if (getDistance(player, dummy) < reach) {
                 player.lastAttack = now;
-                // Return damage info so GameCanvas can emit it to the server
                 return { hit: true, damage: equippedWeapon.damage };
             }
         }
     }
-    
     return null;
 }
 

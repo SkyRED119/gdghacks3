@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   drawCooldownBar,
   drawGrid,
@@ -7,6 +7,7 @@ import {
   type GameState,
   type Rect,
 } from './engine';
+import { io, Socket } from 'socket.io-client';
 
 export type ArmorColor = 'silver' | 'red' | 'blue' | 'gold' | 'black';
 export type ArmorSlot = 'head' | 'chest' | 'legs';
@@ -124,74 +125,126 @@ function drawArmorSprite(
 }
 
 export const GameCanvas: React.FC<GameCanvasProps> = ({ armor }) => {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const imagesRef = useRef<SpriteImageMap>(createSpriteImages());
-  const animationRef = useRef<PlayerAnimationState>({
-    direction: 'down',
-    action: 'idle',
-    slashUntil: 0,
-  });
-  const frameRef = useRef(0);
+    const canvasRef = useRef<HTMLCanvasElement>(null);
+    const imagesRef = useRef<SpriteImageMap>(createSpriteImages());
+    const animationRef = useRef<PlayerAnimationState>({
+        direction: 'down',
+        action: 'idle',
+        slashUntil: 0,
+    });
+    const frameRef = useRef(0);
+    const [currency, setCurrency] = useState(100);
+    const socketRef = useRef<Socket | null>(null);
 
-  const resellStation: Rect = { x: 500, y: 300, width: 80, height: 80 };
+    useEffect(() => {
+        // Connect to the server
+        socketRef.current = io('http://10.12.187.119:3000');
+        const socket = socketRef.current;
 
-  const state = useRef<GameState>({
-    player: {
-      x: 50,
-      y: 50,
-      width: 64,
-      height: 64,
-      vx: 0,
-      vy: 0,
-      accel: 0.8,
-      friction: 0.85,
-      maxSpeed: 6,
-      color: '#3498db',
-      lastAttack: 0,
-    },
-    otherPlayers: {},
-    dummy: { x: 260, y: 240, width: 64, height: 64, hp: 100, maxHp: 100, isDead: false, respawnTimer: 0 },
-    worldItems: [],
-    currency: 0,
-    equippedWeapon: { id: 1, name: 'Training Sword', x: 0, y: 0, width: 30, height: 30, price: 0, damage: 10, speed: 1.5, color: '#bdc3c7' },
-    keys: {},
-  });
+        socket.on('updateDummy', (serverDummy) => {
+        state.current.dummy = { ...state.current.dummy, ...serverDummy };
+        });
 
-  const update = () => {
-    const s = state.current;
-    const inputDirection = getInputDirection(s.keys);
-    const now = Date.now();
+        socket.on('enemyDeath', (data) => {
+        console.log(`${data.type} has been defeated!`);
+        // You could trigger a global sound or animation here
+        });
 
-    if (inputDirection) {
-      animationRef.current.direction = inputDirection;
-    }
+        socket.on('updatePlayers', (serverPlayers) => {
+            // Remove ourself from the list of "other players"
+            const others = { ...serverPlayers };
+            delete others[socket.id!];
+            state.current.otherPlayers = others;
+        });
 
-    if (s.keys['Space']) {
-      animationRef.current.action = 'slash';
-      animationRef.current.slashUntil = now + 350;
-    } else if (now < animationRef.current.slashUntil) {
-      animationRef.current.action = 'slash';
-    } else if (isMoving(s.keys)) {
-      animationRef.current.action = 'run';
-    } else {
-      animationRef.current.action = 'idle';
-    }
+        socket.on('playerMoved', (data) => {
+            if (state.current.otherPlayers[data.id]) {
+                state.current.otherPlayers[data.id].x = data.x;
+                state.current.otherPlayers[data.id].y = data.y;
+            }
+        });
 
-    updatePlayerPhysics(s.player, s.keys);
-    processInteractions(s, resellStation);
-  };
+        return () => {
+            socket.disconnect();
+        };
+    }, []);
 
-  const draw = (ctx: CanvasRenderingContext2D) => {
-    const s = state.current;
-    const p = s.player;
-    const animation = animationRef.current;
+    // Define stations here so they are accessible
+    const resellStation: Rect = { x: 500, y: 300, width: 80, height: 80 };
 
-    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+    const state = useRef<GameState>({
+        player: { 
+            x: 50, y: 50, width: 40, height: 40, 
+            vx: 0, vy: 0, accel: 0.8, friction: 0.85, 
+            maxSpeed: 6, color: '#3498db', lastAttack: 0,
+            hp: 100, maxHp: 100
+        },
+        otherPlayers: {},
+        dummy: { x: 100, y: 300, width: 40, height: 40, hp: 100, maxHp: 100, isDead: false, respawnTimer: 0 },
+        worldItems: [
+            { id: 1, name: 'Dagger', x: 200, y: 100, width: 20, height: 20, price: 20, damage: 10, speed: 1.5, color: '#95a5a6', range: 30 },
+            { id: 2, name: 'Sword', x: 300, y: 100, width: 25, height: 25, price: 50, damage: 25, speed: 1.0, color: '#bdc3c7', range: 50 },
+            { id: 3, name: 'Hammer', x: 400, y: 100, width: 30, height: 30, price: 100, damage: 60, speed: 0.5, color: '#7f8c8d', range: 70 }
+        ],
+        currency: 100,
+        equippedWeapon: null,
+        keys: {},
+        enemies: {}
+    });
 
-    ctx.save();
-    ctx.translate(-p.x + ctx.canvas.width / 2, -p.y + ctx.canvas.height / 2);
+    // --- GAME ENGINE FUNCTIONS ---
+    const update = () => {
+        const s = state.current;
+        const oldX = s.player.x;
+        const oldY = s.player.y;
 
-    drawGrid(ctx);
+        const inputDirection = getInputDirection(s.keys);
+        const now = Date.now();
+
+        if (inputDirection) {
+        animationRef.current.direction = inputDirection;
+        }
+
+        if (s.keys['Space']) {
+        animationRef.current.action = 'slash';
+        animationRef.current.slashUntil = now + 350;
+        } else if (now < animationRef.current.slashUntil) {
+        animationRef.current.action = 'slash';
+        } else if (isMoving(s.keys)) {
+        animationRef.current.action = 'run';
+        } else {
+        animationRef.current.action = 'idle';
+        }
+        
+        // Call the engine functions
+        updatePlayerPhysics(s.player, s.keys);
+        const interactionResult = processInteractions(s, resellStation);
+
+        if (interactionResult?.hit) {
+        socketRef.current?.emit('hitDummy', { damage: interactionResult.damage });
+        }
+
+        // Only send data if we actually moved
+        if (s.player.x !== oldX || s.player.y !== oldY) {
+            socketRef.current?.emit('move', { x: s.player.x, y: s.player.y });
+        }
+
+        // 2. Sync currency to React UI
+        if (s.currency !== currency) setCurrency(s.currency);
+    };
+
+    const draw = (ctx: CanvasRenderingContext2D) => {
+        const s = state.current;
+        const p = s.player;
+        const animation = animationRef.current;
+
+        ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+
+        ctx.save();
+        // Camera follow
+        ctx.translate(-p.x + ctx.canvas.width / 2, -p.y + ctx.canvas.height / 2);
+
+        drawGrid(ctx);
 
     ctx.fillStyle = '#e74c3c';
     ctx.fillRect(resellStation.x, resellStation.y, resellStation.width, resellStation.height);
@@ -207,20 +260,28 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ armor }) => {
       ctx.fillRect(s.dummy.x, s.dummy.y - 10, (s.dummy.hp / s.dummy.maxHp) * s.dummy.width, 5);
     }
 
-    drawArmorSprite(
-      ctx,
-      imagesRef.current,
-      armor,
-      p.x,
-      p.y,
-      animation.action,
-      animation.direction,
-      frameRef.current
-    );
+        // 4. Draw Player (Color changes if weapon equipped)
+        drawArmorSprite(
+        ctx,
+        imagesRef.current,
+        armor,
+        p.x,
+        p.y,
+        animation.action,
+        animation.direction,
+        frameRef.current
+        );
 
-    if (s.equippedWeapon) {
-      drawCooldownBar(ctx, p, s.equippedWeapon);
-    }
+        // Inside the draw loop in GameCanvas.tsx
+        Object.values(s.otherPlayers).forEach(remotePlayer => {
+            ctx.fillStyle = remotePlayer.color;
+            ctx.fillRect(remotePlayer.x, remotePlayer.y, 40, 40);
+        });
+
+        // 5. Draw Cooldown
+        if (s.equippedWeapon) {
+            drawCooldownBar(ctx, p, s.equippedWeapon);
+        }
 
     ctx.restore();
   };
